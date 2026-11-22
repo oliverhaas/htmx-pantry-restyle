@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>htmx 4 pantry restyle</title>
+<link href="https://cdn.jsdelivr.net/npm/daisyui@5.8.2/daisyui.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.5"></script>
+<script>
+  // htmx 4.0.2 from jsDelivr, or one of the patched builds next to this page
+  let builds = {
+    '4.0.2': ['https://cdn.jsdelivr.net/npm/htmx.org@4.0.2/dist/htmx.js', 'htmx 4.0.2 as published'],
+    lazy: ['htmx-lazy.js', 'htmx 4.0.2 with the lazy pantry'],
+    permanent: ['htmx-permanent.js', 'htmx 4.0.2 with the lazy and permanent pantry'],
+  };
+  let build = builds[new URLSearchParams(location.search).get('htmx')] || builds['4.0.2'];
+  document.write(`<script src="${build[0]}"><\/script>`);
+</script>
+</head>
+<body class="p-4">
+<div class="breadcrumbs"><ul><li><a>Home</a></li><li><a>Tasks</a></li><li>Board</li></ul></div>
+<div class="space-y-4 mb-4">
+<p>JS: <b id="state"></b>. Switch to
+  <a class="link" href="?htmx=4.0.2">4.0.2 as published</a>,
+  <a class="link" href="?htmx=lazy">the lazy pantry</a> or
+  <a class="link" href="?htmx=permanent">the lazy and permanent pantry</a>.</p>
+<p>Press each button a few times, then switch and press them again.
+  With the permanent pantry, the first task move adds the pantry, so only the moves after it are fast.</p>
+<p>Last swap (swap, style and layout): <b id="time">–</b></p>
+<button type="button" class="btn" hx-get="/time" hx-target="#now" hx-swap="innerHTML">Update the time (innerHTML)</button>
+<button type="button" class="btn" hx-get="/time" hx-target="#now" hx-swap="innerMorph">Update the time (innerMorph)</button>
+<button type="button" class="btn" hx-get="/board" hx-target="#board" hx-swap="innerMorph">Move a task to done (innerMorph)</button>
+<p>Time: <output id="now">–</output></p>
+</div>
+<input class="input" placeholder="Search tasks">
+<div id="board" class="flex gap-16 my-4"></div>
+<table class="table"><tbody id="rows"></tbody></table>
+<script>
+  state.textContent = build[1];
+  rows.innerHTML = ('<tr>' + '<td>cell</td>'.repeat(8) + '</tr>').repeat(500);
+
+  let todo = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], done = [];
+  let list = (id, title, tasks) => `<div><h2 class="font-bold">${title}</h2><ul id="${id}">${
+    tasks.map(n => `<li id="task-${n}">Task ${n}</li>`).join('')}</ul></div>`;
+  let renderBoard = () => list('todo', 'To do', todo) + list('done', 'Done', done);
+  board.innerHTML = renderBoard();
+
+  // Answer the requests in the page, so the repro runs without a server
+  let answers = {
+    '/time': () => `<b>${new Date().toLocaleTimeString()}</b>`,
+    '/board': () => {
+      if (todo.length) done.unshift(todo.shift());
+      else [todo, done] = [done.reverse(), []];
+      return renderBoard();
+    },
+  };
+  document.addEventListener('htmx:before:request', (e) => {
+    let html = answers[e.target.getAttribute('hx-get')]();
+    e.detail.ctx.fetch = async () => new Response(html);
+  });
+
+  let start;
+  document.addEventListener('htmx:before:swap', () => start = performance.now());
+  document.addEventListener('htmx:after:swap', () => {
+    document.body.offsetHeight; // run style and layout now, so the time includes them
+    time.textContent = `${(performance.now() - start).toFixed(1)} ms`;
+  });
+</script>
+</body>
+</html>
